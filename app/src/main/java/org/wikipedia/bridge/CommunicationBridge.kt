@@ -50,7 +50,7 @@ class CommunicationBridge constructor(private val communicationBridgeListener: C
 
     init {
         communicationBridgeListener.webView.settings.javaScriptEnabled = true
-        communicationBridgeListener.webView.settings.allowUniversalAccessFromFileURLs = true
+        communicationBridgeListener.webView.settings.allowUniversalAccessFromFileURLs = false
         communicationBridgeListener.webView.settings.mediaPlaybackRequiresUserGesture = false
         communicationBridgeListener.webView.webChromeClient = CommunicatingChrome()
         communicationBridgeListener.webView.addJavascriptInterface(PcsClientJavascriptInterface(), "pcsClient")

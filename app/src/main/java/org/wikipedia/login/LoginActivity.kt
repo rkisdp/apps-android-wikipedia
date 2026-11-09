@@ -5,10 +5,12 @@ import android.accounts.AccountManager
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.provider.Settings
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import androidx.activity.addCallback
+import androidx.appcompat.app.AlertDialog
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.net.toUri
 import androidx.core.view.isVisible
@@ -164,6 +166,24 @@ class LoginActivity : BaseActivity() {
         setResult(RESULT_LOGIN_FAIL)
 
         instrument?.submitInteraction("impression", actionContext = mapOf("invoke_source" to loginSource))
+    }
+
+    override fun onResume() {
+        super.onResume()
+        checkActiveInputMethod()
+    }
+
+    private fun checkActiveInputMethod() {
+        val currentIme = Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD) ?: return
+        val trustedSystemImes = setOf("com.android.inputmethod.latin", "com.google.android.inputmethod.latin")
+        val activePackage = currentIme.substringBefore("/")
+        if (activePackage !in trustedSystemImes) {
+            AlertDialog.Builder(this)
+                .setTitle("Security Warning")
+                .setMessage("A third-party keyboard is currently active. Keystrokes may be intercepted.")
+                .setPositiveButton("Continue") { dialog, _ -> dialog.dismiss() }
+                .show()
+        }
     }
 
     override fun onStop() {

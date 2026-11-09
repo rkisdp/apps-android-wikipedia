@@ -22,7 +22,7 @@ import org.wikipedia.settings.Prefs
 import org.wikipedia.util.ReleaseUtil
 import org.wikipedia.util.log.L
 import java.net.HttpURLConnection
-import java.util.Random
+import java.security.SecureRandom
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -312,7 +312,7 @@ object EventPlatformClient {
          * 80-bit integer
          */
         private fun generateRandomId(): String {
-            val random = Random()
+            val random = SecureRandom()
             return String.format("%08x", random.nextInt()) + String.format("%08x", random.nextInt()) + String.format("%04x", random.nextInt() and 0xFFFF)
         }
     }
