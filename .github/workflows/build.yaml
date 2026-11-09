@@ -1,0 +1,93 @@
+# The name of our workflow
+name: Appknox Build
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      riskThreshold:
+        description: "Risk Threshold"
+        required: false
+        default: CRITICAL
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  RISK_THRESHOLD: CRITICAL
+  APPKNOX_ACCESS_TOKEN: 12113443ec9b5c141adc459f9afec11830d709d4
+  APPKNOX_API_HOST: https://autofix.staging.appknox.io/
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set risk threshold for push
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          echo "RISK_THRESHOLD=${{ env.RISK_THRESHOLD }}" >> $GITHUB_ENV
+      - name: Set risk threshold for workflow_dispatch
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "RISK_THRESHOLD=${{ github.event.inputs.riskThreshold }}" >> $GITHUB_ENV
+      # Toolchain matches the project's own android.yml / android_pr.yml
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: "25"
+          distribution: temurin
+          cache: gradle
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+      # "alpha" is the flavor the project uses for CI/QA (see AGENTS.md);
+      # debug builds use the debug signing config, so no keys are needed.
+      - name: Build the app
+        timeout-minutes: 45
+        run: ./gradlew bundleAlphaDebug --no-daemon
+      - name: Locate the built AAB
+        run: |
+          APP_PATH="$(find app/build/outputs/bundle -name '*.aab' | head -n 1)"
+          test -n "$APP_PATH" || { echo "No AAB found under app/build/outputs/bundle"; exit 1; }
+          echo "Built AAB: $APP_PATH"
+          echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wikipedia-alpha.aab
+          path: ${{ env.APP_PATH }}
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - name: Checkout appknox-go
+        uses: actions/checkout@v4
+        with:
+          repository: appknox/appknox-go
+          ref: feature/knoxfixer
+          path: appknox-go
+      - name: Build appknox CLI
+        working-directory: appknox-go
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/bin"
+          go build -o "$GITHUB_WORKSPACE/bin/appknox" .
+      - name: Upload app and run Appknox cicheck
+        id: appknox_scan
+        continue-on-error: true
+        run: |
+          FILE_ID=$(./bin/appknox upload "$APP_PATH" --knoxiq)
+          echo "Uploaded file id: $FILE_ID"
+          echo "file_id=$FILE_ID" >> "$GITHUB_OUTPUT"
+          ./bin/appknox cicheck "$FILE_ID" --risk-threshold "${RISK_THRESHOLD}"
+      - name: Run Appknox autofix
+        if: steps.appknox_scan.outputs.file_id != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          APPKNOX=./bin/appknox
+          FILE_ID="${{ steps.appknox_scan.outputs.file_id }}"
+          $APPKNOX knoxfixer --file-id "$FILE_ID"
+      - name: Fail if cicheck found issues
+        if: steps.appknox_scan.outcome == 'failure'
+        run: exit 1
