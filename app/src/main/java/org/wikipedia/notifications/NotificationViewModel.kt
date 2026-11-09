@@ -14,8 +14,8 @@ import org.wikipedia.notifications.db.Notification
 import org.wikipedia.settings.Prefs
 import org.wikipedia.util.Resource
 import org.wikipedia.util.StringUtil
+import java.security.SecureRandom
 import java.util.Date
-import java.util.Random
 
 class NotificationViewModel : ViewModel() {
 
@@ -148,7 +148,7 @@ class NotificationViewModel : ViewModel() {
 
     fun markItemsAsRead(items: List<NotificationListItemContainer>, markUnread: Boolean) {
         val notificationsPerWiki = mutableMapOf<WikiSite, MutableList<Notification>>()
-        val selectionKey = if (items.size > 1) Random().nextLong() else null
+        val selectionKey = if (items.size > 1) SecureRandom().nextLong() else null
         for (item in items) {
             val notification = item.notification!!
             val wiki = dbNameMap.getOrElse(notification.wiki) {
